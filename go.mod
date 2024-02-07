@@ -1,3 +1,3 @@
-module github.com/giffone/zerone_api/v1.0
+module github.com/giffone/zerone_api
 
 go 1.21.5
