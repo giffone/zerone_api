@@ -1,4 +1,4 @@
-package go_01_edu_api
+package zero
 
 import (
 	"fmt"
