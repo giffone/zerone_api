@@ -10,13 +10,13 @@ import (
 	"time"
 )
 
-type RequestToken struct {
+type requestToken struct {
 	domain string
 	cli    *http.Client
 }
 
-func NewRequestToken(domain, accessToken string) *RequestToken {
-	return &RequestToken{
+func newRequestToken(domain, accessToken string) *requestToken {
+	return &requestToken{
 		domain:      domain,
 		cli: &http.Client{
 			Transport: &http.Transport{
@@ -27,7 +27,7 @@ func NewRequestToken(domain, accessToken string) *RequestToken {
 	}
 }
 
-func (rt *RequestToken) sendRequest(path string, headers map[string]string, data []byte) (*http.Response, error) {
+func (rt *requestToken) sendRequest(path string, headers map[string]string, data []byte) (*http.Response, error) {
 	method := "GET"
 	if data != nil {
 		method = "POST"
@@ -62,7 +62,7 @@ func (rt *RequestToken) sendRequest(path string, headers map[string]string, data
 	return resp, nil
 }
 
-func (rt *RequestToken) getNewToken(accessToken string) (*token, error) {
+func (rt *requestToken) getNewToken(accessToken string) (*token, error) {
 	resp, err := rt.sendRequest(
 		fmt.Sprintf("/api/auth/token?token=%s", accessToken),
 		nil,
@@ -75,7 +75,7 @@ func (rt *RequestToken) getNewToken(accessToken string) (*token, error) {
 	return read(resp)
 }
 
-func (rt *RequestToken) refreshToken(base string) (*token, error) {
+func (rt *requestToken) refreshToken(base string) (*token, error) {
 	resp, err := rt.sendRequest(
 		"/api/auth/refresh",
 		map[string]string{"x-jwt-token": base},

@@ -30,6 +30,4 @@ func Test(t *testing.T) {
 	}
 
 	fmt.Println(string(result))
-	fmt.Println(client.storage.token.base64)
-
 }
