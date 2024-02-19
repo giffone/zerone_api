@@ -12,7 +12,7 @@ func CreateClient(domain, accessToken string) (cli *Client, err error) {
 	}
 
 	// get jwt token
-	cli.storage.token, err = cli.request.getToken()
+	cli.storage.token, err = cli.request.getNewToken(accessToken)
 	if err != nil {
 		return nil, fmt.Errorf("get token: %w", err)
 	}
@@ -35,13 +35,14 @@ func (c *Client) Run(query string, variables map[string]interface{}) ([]byte, er
 		return nil, fmt.Errorf("marshal: %w", err)
 	}
 
+	// check if token is expired
 	c.storage.mu.RLock()
 	expired := isExpired(c.storage.token.payload.Exp)
 	base := c.storage.token.base64
 	c.storage.mu.RUnlock()
 
 	if expired {
-		// check jwt token
+		// get refreshed jwt token
 		token, err := c.request.refreshToken(base)
 		if err != nil {
 			return nil, fmt.Errorf("refresh token: %w", err)
@@ -58,7 +59,7 @@ func (c *Client) Run(query string, variables map[string]interface{}) ([]byte, er
 		"Content-Length": fmt.Sprint(len(form)),
 	}
 
-	resp, err := c.request.sendRequest(c.request.domain, "/api/graphql-engine/v1/graphql", headers, form)
+	resp, err := c.request.sendRequest("/api/graphql-engine/v1/graphql", headers, form)
 	if err != nil {
 		return nil, fmt.Errorf("fetch: %w", err)
 	}

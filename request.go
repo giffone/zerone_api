@@ -11,14 +11,13 @@ import (
 )
 
 type RequestToken struct {
-	domain, accessToken string
-	cli                 *http.Client
+	domain string
+	cli    *http.Client
 }
 
 func NewRequestToken(domain, accessToken string) *RequestToken {
 	return &RequestToken{
 		domain:      domain,
-		accessToken: accessToken,
 		cli: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -28,13 +27,21 @@ func NewRequestToken(domain, accessToken string) *RequestToken {
 	}
 }
 
-func (rt *RequestToken) sendRequest(domain, path string, headers map[string]string, data []byte) (*http.Response, error) {
+func (rt *RequestToken) sendRequest(path string, headers map[string]string, data []byte) (*http.Response, error) {
 	method := "GET"
 	if data != nil {
 		method = "POST"
 	}
 
-	req, err := http.NewRequest(method, fmt.Sprintf("https://%s%s", domain, path), bytes.NewBuffer(data))
+	var body io.Reader
+
+	if data != nil {
+		body = bytes.NewBuffer(data)
+	} else {
+		body = nil
+	}
+
+	req, err := http.NewRequest(method, fmt.Sprintf("https://%s%s", rt.domain, path), body)
 	if err != nil {
 		return nil, fmt.Errorf("request: %w", err)
 	}
@@ -55,15 +62,14 @@ func (rt *RequestToken) sendRequest(domain, path string, headers map[string]stri
 	return resp, nil
 }
 
-func (rt *RequestToken) getToken() (*token, error) {
+func (rt *RequestToken) getNewToken(accessToken string) (*token, error) {
 	resp, err := rt.sendRequest(
-		rt.domain,
-		fmt.Sprintf("/api/auth/token?token=%s", rt.accessToken),
+		fmt.Sprintf("/api/auth/token?token=%s", accessToken),
 		nil,
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("do: %s", err)
+		return nil, fmt.Errorf("sendRequest: %s", err)
 	}
 
 	return read(resp)
@@ -71,13 +77,12 @@ func (rt *RequestToken) getToken() (*token, error) {
 
 func (rt *RequestToken) refreshToken(base string) (*token, error) {
 	resp, err := rt.sendRequest(
-		rt.domain,
 		"/api/auth/refresh",
 		map[string]string{"x-jwt-token": base},
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("do: %s", err)
+		return nil, fmt.Errorf("sendRequest: %s", err)
 	}
 
 	return read(resp)
