@@ -3,7 +3,6 @@ package zero
 import (
 	"bytes"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -99,23 +98,6 @@ func read(resp *http.Response) (*token, error) {
 	}
 
 	return &t, nil
-}
-
-func unmrshl(resp *http.Response) (map[string]interface{}, error) {
-	defer resp.Body.Close()
-
-	var response map[string]interface{}
-
-	err := json.NewDecoder(resp.Body).Decode(&response)
-	if err != nil {
-		return nil, fmt.Errorf("decode body: %w", err)
-	}
-
-	if errors, ok := response["errors"]; ok {
-		return nil, fmt.Errorf("error: %s", errors.([]interface{})[0].(map[string]interface{})["message"])
-	}
-
-	return response["data"].(map[string]interface{}), nil
 }
 
 func isExpired(date int64) bool {
