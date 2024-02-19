@@ -6,29 +6,36 @@ import (
 	"sync"
 )
 
-func CreateClient(domain, accessToken string) (cli *Client, err error) {
-	cli = &Client{
-		request: NewRequestToken(domain, accessToken),
+type Client interface {
+	Run(query string, variables map[string]interface{}) ([]byte, error)
+}
+
+func CreateClient(domain, accessToken string) (Client, error) {
+	var err error
+
+	c := client{
+		request: newRequestToken(domain, accessToken),
 	}
 
-	// get jwt token
-	cli.storage.token, err = cli.request.getNewToken(accessToken)
+	// get new jwt token
+	c.storage.token, err = c.request.getNewToken(accessToken)
 	if err != nil {
 		return nil, fmt.Errorf("get token: %w", err)
 	}
 
-	return
+	return &c, nil
 }
 
-type Client struct {
+type client struct {
 	storage struct {
 		mu    sync.RWMutex
 		token *token
 	}
-	request *RequestToken
+	request *requestToken
 }
 
-func (c *Client) Run(query string, variables map[string]interface{}) ([]byte, error) {
+// Run makes query request
+func (c *client) Run(query string, variables map[string]interface{}) ([]byte, error) {
 	// prepare graphql query
 	form, err := json.Marshal(map[string]interface{}{"query": query, "variables": variables})
 	if err != nil {
