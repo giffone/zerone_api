@@ -29,7 +29,7 @@ func Test(t *testing.T) {
 		t.Fatalf("run: %s", err)
 	}
 
-	fmt.Println(result)
+	fmt.Println(string(result))
 	fmt.Println(client.storage.token.base64)
-	
+
 }
