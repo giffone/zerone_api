@@ -17,7 +17,7 @@ type Client struct {
 	storage             storage
 }
 
-func (c *Client) Run(query string, variables map[string]interface{}) (map[string]interface{}, error) {
+func (c *Client) Run(query string, variables map[string]interface{}) ([]byte, error) {
 	// prepare graphql query
 	form, err := json.Marshal(map[string]interface{}{"query": query, "variables": variables})
 	if err != nil {
@@ -43,16 +43,23 @@ func (c *Client) Run(query string, variables map[string]interface{}) (map[string
 
 	defer resp.Body.Close()
 
-	var response map[string]interface{}
+	var response struct {
+		Errors []struct {
+			Message string `json:"message,omitempty"`
+		} `json:"errors,omitempty"`
+		Data json.RawMessage `json:"data,omitempty"`
+	}
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
 		return nil, fmt.Errorf("decode body: %w", err)
 	}
 
-	if errors, ok := response["errors"]; ok {
-		return nil, fmt.Errorf("error: %s", errors.([]interface{})[0].(map[string]interface{})["message"])
+	if len(response.Errors) > 0 && response.Errors[0].Message != "" {
+		return nil, fmt.Errorf("graphql: %s", response.Errors[0].Message)
 	}
 
-	return response["data"].(map[string]interface{}), nil
+	return response.Data, nil
 }
+
+

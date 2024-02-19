@@ -18,7 +18,7 @@ func Test(t *testing.T) {
 		  email
 		}
 	}`
-	
+
 	variables := map[string]interface{}{"latest": "2023-01-01"}
 
 	result, err := client.Run(query, variables)
@@ -26,8 +26,7 @@ func Test(t *testing.T) {
 		t.Errorf("run: %s", err)
 	}
 
-	fmt.Println(result)
-	if client.storage.pendingToken != nil {
-		fmt.Println(client.storage.pendingToken.base64)
-	}
+	fmt.Println(string(result))
+	fmt.Println(client.storage.pendingToken.base64)
+
 }
