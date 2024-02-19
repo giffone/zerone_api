@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 )
 
@@ -53,32 +52,4 @@ func base64urlUnescape(str string) string {
 	str = strings.ReplaceAll(str, "-", "+")
 	str = strings.ReplaceAll(str, "_", "/")
 	return str
-}
-
-type requestToken struct {
-	domain, urlPath string
-	headers         map[string]string
-	data            []byte
-}
-
-func (rt *requestToken) do() (*token, error) {
-	resp, err := sendRequest(rt.domain, rt.urlPath, rt.headers, rt.data)
-	if err != nil {
-		return nil, fmt.Errorf("fetch: %w", err)
-	}
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read: %w", err)
-	}
-
-	t := token{base64: strings.ReplaceAll(string(body), "\"", "")}
-
-	if err := t.decode(); err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
-	}
-
-	return &t, nil
 }

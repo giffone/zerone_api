@@ -9,7 +9,10 @@ func Test(t *testing.T) {
 	domain := "dev.01-edu.org"
 	accessToken := "427faa391a0d73a68b69d4d3b65796fd798e9156"
 
-	client := CreateClient(domain, accessToken)
+	client, err := CreateClient(domain, accessToken)
+	if err != nil {
+		t.Fatalf("Create client: %s", err)
+	}
 
 	query := `query newUsers($latest: timestamptz!) {
 		newUsers: user(where: { createdAt: { _gt: $latest } }) {
@@ -18,16 +21,15 @@ func Test(t *testing.T) {
 		  email
 		}
 	}`
-	
+
 	variables := map[string]interface{}{"latest": "2023-01-01"}
 
 	result, err := client.Run(query, variables)
 	if err != nil {
-		t.Errorf("run: %s", err)
+		t.Fatalf("run: %s", err)
 	}
 
 	fmt.Println(result)
-	if client.storage.pendingToken != nil {
-		fmt.Println(client.storage.pendingToken.base64)
-	}
+	fmt.Println(client.storage.token.base64)
+	
 }
