@@ -26,19 +26,33 @@ type token struct {
 	}
 }
 
-func (t *token) decode() error {
+func (t *token) decode(debug bool) error {
 	parts := strings.Split(t.base64, ".")
 
 	if len(parts) <= 1 {
+		if debug {
+			return fmt.Errorf("the token length is incorrect: %v", parts)
+		}
 		return fmt.Errorf("the token length is incorrect")
 	}
 
-	payload, err := base64.RawURLEncoding.DecodeString(base64urlUnescape(parts[1]))
+	unesc := base64urlUnescape(parts[1])
+
+	payload, err := base64.RawURLEncoding.DecodeString(unesc)
 	if err != nil {
+		if debug {
+			return fmt.Errorf("base64: decode string: part [1]:%s\n unescape [add '='; '-'->'+'; '_'->'/']:%s\nerror: %w", parts[1], unesc, err)
+		}
 		return fmt.Errorf("base64: decode string: %w", err)
 	}
 
-	json.Unmarshal(payload, &t.payload)
+	err = json.Unmarshal(payload, &t.payload)
+	if err != nil {
+		if debug {
+			return fmt.Errorf("unmarshal: payload:%s\nerror %w", string(payload), err)
+		}
+		return fmt.Errorf("unmarshal: %w", err)
+	}
 
 	return nil
 }
