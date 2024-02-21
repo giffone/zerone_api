@@ -4,17 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 )
 
 type Client interface {
 	Run(query string, variables map[string]interface{}) ([]byte, error)
 }
 
-func CreateClient(domain, accessToken string) (Client, error) {
+func CreateClient(domain, accessToken string, debug bool) (Client, error) {
 	var err error
 
 	c := client{
-		request: newRequestToken(domain, accessToken),
+		debug:   debug,
+		request: newRequestToken(domain, accessToken, debug),
 	}
 
 	// get new jwt token
@@ -27,6 +29,7 @@ func CreateClient(domain, accessToken string) (Client, error) {
 }
 
 type client struct {
+	debug   bool
 	storage struct {
 		mu    sync.RWMutex
 		token *token
@@ -39,19 +42,26 @@ func (c *client) Run(query string, variables map[string]interface{}) ([]byte, er
 	// prepare graphql query
 	form, err := json.Marshal(map[string]interface{}{"query": query, "variables": variables})
 	if err != nil {
+		if c.debug {
+			return nil, fmt.Errorf("marshal: query: %s\nvariables:%v\nerror: %w", query, variables, err)
+		}
 		return nil, fmt.Errorf("marshal: %w", err)
 	}
 
 	// check if token is expired
 	c.storage.mu.RLock()
-	expired := isExpired(c.storage.token.payload.Exp)
+	expireDate := c.storage.token.payload.Exp
 	base := c.storage.token.base64
 	c.storage.mu.RUnlock()
 
-	if expired {
+	if isExpired(expireDate) {
 		// get refreshed jwt token
 		token, err := c.request.refreshToken(base)
 		if err != nil {
+			if c.debug {
+				ed := time.Unix(expireDate, 0).Format("2006-01-02 15:04:05 MST")
+				return nil, fmt.Errorf("refresh token: exp date:%s\nbase: %s\nerror: %w", ed, base, err)
+			}
 			return nil, fmt.Errorf("refresh token: %w", err)
 		}
 		c.storage.mu.Lock()
@@ -66,9 +76,14 @@ func (c *client) Run(query string, variables map[string]interface{}) ([]byte, er
 		"Content-Length": fmt.Sprint(len(form)),
 	}
 
-	resp, err := c.request.sendRequest("/api/graphql-engine/v1/graphql", headers, form)
+	path := "/api/graphql-engine/v1/graphql"
+
+	resp, err := c.request.sendRequest(path, headers, form)
 	if err != nil {
-		return nil, fmt.Errorf("fetch: %w", err)
+		if c.debug {
+			return nil, fmt.Errorf("sendRequest: path: %s\nheaders: %v\nbody: %v\nerror: %s", path, headers, form, err)
+		}
+		return nil, fmt.Errorf("sendRequest: %w", err)
 	}
 
 	defer resp.Body.Close()
@@ -82,14 +97,19 @@ func (c *client) Run(query string, variables map[string]interface{}) ([]byte, er
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
+		if c.debug {
+			return nil, fmt.Errorf("decode body: path: %s\nheaders: %v\nbody: %v\nerror: %s", path, headers, form, err)
+		}
 		return nil, fmt.Errorf("decode body: %w", err)
 	}
 
 	if len(response.Errors) > 0 && response.Errors[0].Message != "" {
-		return nil, fmt.Errorf("graphql: %s", response.Errors[0].Message)
+		msg := response.Errors[0].Message
+		if c.debug {
+			return nil, fmt.Errorf("graphql: path: %s\nheaders: %v\nbody: %v\nerror: %s", path, headers, form, msg)
+		}
+		return nil, fmt.Errorf("graphql: %s", msg)
 	}
 
 	return response.Data, nil
 }
-
-

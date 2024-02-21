@@ -11,13 +11,15 @@ import (
 )
 
 type requestToken struct {
+	debug  bool
 	domain string
 	cli    *http.Client
 }
 
-func newRequestToken(domain, accessToken string) *requestToken {
+func newRequestToken(domain, accessToken string, debug bool) *requestToken {
 	return &requestToken{
-		domain:      domain,
+		debug:  debug,
+		domain: domain,
 		cli: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -41,8 +43,13 @@ func (rt *requestToken) sendRequest(path string, headers map[string]string, data
 		body = nil
 	}
 
-	req, err := http.NewRequest(method, fmt.Sprintf("https://%s%s", rt.domain, path), body)
+	url := fmt.Sprintf("https://%s%s", rt.domain, path)
+
+	req, err := http.NewRequest(method, url, body)
 	if err != nil {
+		if rt.debug {
+			return nil, fmt.Errorf("request: url:%s\nbody:%s\nerror %w", url, body, err)
+		}
 		return nil, fmt.Errorf("request: %w", err)
 	}
 
@@ -52,10 +59,16 @@ func (rt *requestToken) sendRequest(path string, headers map[string]string, data
 
 	resp, err := rt.cli.Do(req)
 	if err != nil {
+		if rt.debug {
+			return nil, fmt.Errorf("request: url:%s\nheaders:%v\nbody:%s\nerror %w", url, req.Header, body, err)
+		}
 		return nil, fmt.Errorf("do: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		if rt.debug {
+			return nil, fmt.Errorf("request: url:%s\nheaders:%v\nbody:%s\nstatus %s", url, req.Header, body, resp.Status)
+		}
 		return nil, fmt.Errorf("status: %d", resp.StatusCode)
 	}
 
@@ -63,32 +76,35 @@ func (rt *requestToken) sendRequest(path string, headers map[string]string, data
 }
 
 func (rt *requestToken) getNewToken(accessToken string) (*token, error) {
-	resp, err := rt.sendRequest(
-		fmt.Sprintf("/api/auth/token?token=%s", accessToken),
-		nil,
-		nil,
-	)
+	path := fmt.Sprintf("/api/auth/token?token=%s", accessToken)
+
+	resp, err := rt.sendRequest(path, nil, nil)
 	if err != nil {
+		if rt.debug {
+			return nil, fmt.Errorf("sendRequest: path: %s\nheaders: nil\nbody: nil\nerror: %s", path, err)
+		}
 		return nil, fmt.Errorf("sendRequest: %s", err)
 	}
 
-	return read(resp)
+	return rt.read(resp)
 }
 
 func (rt *requestToken) refreshToken(base string) (*token, error) {
-	resp, err := rt.sendRequest(
-		"/api/auth/refresh",
-		map[string]string{"x-jwt-token": base},
-		nil,
-	)
+	path := "/api/auth/refresh"
+	headers := map[string]string{"x-jwt-token": base}
+
+	resp, err := rt.sendRequest(path, headers, nil)
 	if err != nil {
+		if rt.debug {
+			return nil, fmt.Errorf("sendRequest: path: %s\nheaders: %v\nbody: nil\nerror: %s", path, headers, err)
+		}
 		return nil, fmt.Errorf("sendRequest: %s", err)
 	}
 
-	return read(resp)
+	return rt.read(resp)
 }
 
-func read(resp *http.Response) (*token, error) {
+func (rt *requestToken) read(resp *http.Response) (*token, error) {
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
@@ -96,9 +112,14 @@ func read(resp *http.Response) (*token, error) {
 		return nil, fmt.Errorf("read: %w", err)
 	}
 
-	t := token{base64: strings.ReplaceAll(string(body), "\"", "")}
+	bodyWithoutBackslash := strings.ReplaceAll(string(body), "\"", "")
 
-	if err := t.decode(); err != nil {
+	t := token{base64: bodyWithoutBackslash}
+
+	if err := t.decode(rt.debug); err != nil {
+		if rt.debug {
+			return nil, fmt.Errorf("decode: body: %s\nbodyWithoutBackslash:%s\nerror: %s", body, bodyWithoutBackslash, err)
+		}
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 
@@ -106,6 +127,6 @@ func read(resp *http.Response) (*token, error) {
 }
 
 func isExpired(date int64) bool {
-	diff := date - time.Now().Add(-100*time.Hour).Unix()/1000 // renew 100 hours before the deadline
+	diff := date - time.Now().Add(-100*time.Hour).Unix() // renew 100 hours before the deadline
 	return diff <= 0
 }

@@ -15,7 +15,9 @@ accessToken := "c45cd0ba337548gh24c5a76b0f63d6d1ed4fh784g84"
 domain := "dev.01-edu.org"
 accessToken := "c45cd0ba337548gh24c5a76b0f63d6d1ed4fh784g84"
 
-client := CreateClient(domain, accessToken)
+debug := true // if you need more informative errors
+
+client := CreateClient(domain, accessToken, debug)
 
 // example graphql query
 query := `query newUsers($latest: timestamptz!) {
