@@ -3,6 +3,7 @@ package zero
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 )
@@ -12,6 +13,14 @@ type Client interface {
 }
 
 func CreateClient(domain, accessToken string, debug bool) (Client, error) {
+	if debug {
+		log.Printf(`
+{
+	"domain": "%s",
+	"accessToken": "%s"
+}`,
+			domain, accessToken)
+	}
 	var err error
 
 	c := client{

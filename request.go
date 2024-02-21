@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"log"
 )
 
 type requestToken struct {
@@ -45,11 +47,20 @@ func (rt *requestToken) sendRequest(path string, headers map[string]string, data
 
 	url := fmt.Sprintf("https://%s%s", rt.domain, path)
 
+	if rt.debug {
+		log.Printf(`
+{
+	"send request": {
+		"url": "%s",
+		"headers": "%v",
+		"body": "%v"
+	}
+}`,
+			url, headers, string(data))
+	}
+
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
-		if rt.debug {
-			return nil, fmt.Errorf("request: url:%s\nbody:%s\nerror %w", url, body, err)
-		}
 		return nil, fmt.Errorf("request: %w", err)
 	}
 
@@ -59,16 +70,10 @@ func (rt *requestToken) sendRequest(path string, headers map[string]string, data
 
 	resp, err := rt.cli.Do(req)
 	if err != nil {
-		if rt.debug {
-			return nil, fmt.Errorf("request: url:%s\nheaders:%v\nbody:%s\nerror %w", url, req.Header, body, err)
-		}
 		return nil, fmt.Errorf("do: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		if rt.debug {
-			return nil, fmt.Errorf("request: url:%s\nheaders:%v\nbody:%s\nstatus %s", url, req.Header, body, resp.Status)
-		}
 		return nil, fmt.Errorf("status: %d", resp.StatusCode)
 	}
 
@@ -80,9 +85,6 @@ func (rt *requestToken) getNewToken(accessToken string) (*token, error) {
 
 	resp, err := rt.sendRequest(path, nil, nil)
 	if err != nil {
-		if rt.debug {
-			return nil, fmt.Errorf("sendRequest: path: %s\nheaders: nil\nbody: nil\nerror: %s", path, err)
-		}
 		return nil, fmt.Errorf("sendRequest: %s", err)
 	}
 
@@ -95,9 +97,6 @@ func (rt *requestToken) refreshToken(base string) (*token, error) {
 
 	resp, err := rt.sendRequest(path, headers, nil)
 	if err != nil {
-		if rt.debug {
-			return nil, fmt.Errorf("sendRequest: path: %s\nheaders: %v\nbody: nil\nerror: %s", path, headers, err)
-		}
 		return nil, fmt.Errorf("sendRequest: %s", err)
 	}
 
@@ -112,14 +111,23 @@ func (rt *requestToken) read(resp *http.Response) (*token, error) {
 		return nil, fmt.Errorf("read: %w", err)
 	}
 
-	bodyWithoutBackslash := strings.ReplaceAll(string(body), "\"", "")
+	strBody := string(body)
+	bodyUnquoted := strings.ReplaceAll(strBody, "\"", "")
 
-	t := token{base64: bodyWithoutBackslash}
+	if rt.debug {
+		log.Printf(`
+{
+	"response body": {
+		"body": "%s",
+		"unquoted": "%s"
+	}
+}`,
+			strBody, bodyUnquoted)
+	}
+
+	t := token{base64: bodyUnquoted}
 
 	if err := t.decode(rt.debug); err != nil {
-		if rt.debug {
-			return nil, fmt.Errorf("decode: body: %s\nbodyWithoutBackslash:%s\nerror: %s", body, bodyWithoutBackslash, err)
-		}
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 

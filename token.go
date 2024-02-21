@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -29,41 +30,76 @@ type token struct {
 func (t *token) decode(debug bool) error {
 	parts := strings.Split(t.base64, ".")
 
+	if debug {
+		log.Printf(`
+{
+	"parts": {
+		"length": %d,
+		"list": "%v"
+	}
+}`,
+			len(parts), parts)
+	}
+
 	if len(parts) <= 1 {
-		if debug {
-			return fmt.Errorf("the token length is incorrect: %v", parts)
-		}
 		return fmt.Errorf("the token length is incorrect")
 	}
 
-	unesc := base64urlUnescape(parts[1])
-
-	payload, err := base64.RawURLEncoding.DecodeString(unesc)
+	// raw encoding witout padding
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
 		if debug {
-			return fmt.Errorf("base64: decode string: part [1]:%s\n unescape [add '='; '-'->'+'; '_'->'/']:%s\nerror: %w", parts[1], unesc, err)
+			log.Printf(`
+{
+	"RawURLEncoding": {
+		"error": "%s",
+	}
+}`,
+				err)
 		}
-		return fmt.Errorf("base64: decode string: %w", err)
+		var err2 error
+		// try standard encoding with padding
+		payload, err2 = base64.StdEncoding.DecodeString(base64urlUnescape(parts[1], debug))
+		if err != nil {
+			return fmt.Errorf("encoding: decode: url: %w std: %w", err, err2)
+		}
 	}
 
+	if debug {
+		log.Printf(`
+{
+	"payload": %s
+}`,
+			string(payload))
+	}
+
+	// parse data
 	err = json.Unmarshal(payload, &t.payload)
 	if err != nil {
-		if debug {
-			return fmt.Errorf("unmarshal: payload:%s\nerror %w", string(payload), err)
-		}
 		return fmt.Errorf("unmarshal: %w", err)
 	}
 
 	return nil
 }
 
-func base64urlUnescape(str string) string {
+func base64urlUnescape(str string, debug bool) string {
 	padding := 4 - (len(str) % 4)
 	if padding == 4 {
 		padding = 0
 	}
+
 	str += strings.Repeat("=", padding)
+
 	str = strings.ReplaceAll(str, "-", "+")
 	str = strings.ReplaceAll(str, "_", "/")
+
+	if debug {
+		log.Printf(`
+{
+"StdEncoding": "%s"
+}`,
+			str)
+	}
+
 	return str
 }
