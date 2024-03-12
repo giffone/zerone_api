@@ -10,6 +10,7 @@ import (
 
 type Client interface {
 	Run(query string, variables map[string]interface{}) ([]byte, error)
+	TokenBase() (int64, string, error)
 }
 
 func CreateClient(domain, accessToken string, debug bool) (Client, error) {
@@ -46,6 +47,11 @@ type client struct {
 	request *requestToken
 }
 
+// TokenBase return encrypted token
+func (c *client) TokenBase() (int64, string, error) {
+	return c.check()
+}
+
 // Run makes query request
 func (c *client) Run(query string, variables map[string]interface{}) ([]byte, error) {
 	// prepare graphql query
@@ -58,24 +64,9 @@ func (c *client) Run(query string, variables map[string]interface{}) ([]byte, er
 	}
 
 	// check if token is expired
-	c.storage.mu.RLock()
-	expireDate := c.storage.token.payload.Exp
-	base := c.storage.token.base64
-	c.storage.mu.RUnlock()
-
-	if isExpired(expireDate) {
-		// get refreshed jwt token
-		token, err := c.request.refreshToken(base)
-		if err != nil {
-			if c.debug {
-				ed := time.Unix(expireDate, 0).Format("2006-01-02 15:04:05 MST")
-				return nil, fmt.Errorf("refresh token: exp date:%s\nbase: %s\nerror: %w", ed, base, err)
-			}
-			return nil, fmt.Errorf("refresh token: %w", err)
-		}
-		c.storage.mu.Lock()
-		c.storage.token = token
-		c.storage.mu.Unlock()
+	_, base, err := c.check()
+	if err != nil {
+		return nil, err
 	}
 
 	// make request
@@ -121,4 +112,28 @@ func (c *client) Run(query string, variables map[string]interface{}) ([]byte, er
 	}
 
 	return response.Data, nil
+}
+
+func (c *client) check() (int64, string, error) {
+	c.storage.mu.RLock()
+	expireDate := c.storage.token.preNotify
+	base := c.storage.token.base64
+	c.storage.mu.RUnlock()
+
+	if isExpired(expireDate) {
+		// get refreshed jwt token
+		token, err := c.request.refreshToken(base)
+		if err != nil {
+			if c.debug {
+				ed := time.Unix(expireDate, 0).Format("2006-01-02 15:04:05 MST")
+				return expireDate, base, fmt.Errorf("refresh token: exp date:%s\nbase: %s\nerror: %w", ed, base, err)
+			}
+			return expireDate, base, fmt.Errorf("refresh token: %w", err)
+		}
+		c.storage.mu.Lock()
+		c.storage.token = token
+		base = c.storage.token.base64
+		c.storage.mu.Unlock()
+	}
+	return expireDate, base, nil
 }

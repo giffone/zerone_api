@@ -16,7 +16,7 @@ type token struct {
 		Sub    string `json:"sub"`
 		Iat    int64  `json:"iat"`
 		IP     string `json:"ip"`
-		Exp    int64  `json:"exp"` // expire
+		Exp    int64  `json:"exp"`
 		Claims struct {
 			XHasuraAllowedRoles []string `json:"x-hasura-allowed-roles"`
 			XHasuraCampuses     string   `json:"x-hasura-campuses"`
@@ -25,6 +25,7 @@ type token struct {
 			XHasuraTokenID      string   `json:"x-hasura-token-id"`
 		} `json:"https://hasura.io/jwt/claims"`
 	}
+	preNotify int64 // expire date minus n hours
 }
 
 func (t *token) decode(debug bool) error {
@@ -60,8 +61,8 @@ func (t *token) decode(debug bool) error {
 		var err2 error
 		// try standard encoding with padding
 		payload, err2 = base64.StdEncoding.DecodeString(base64urlUnescape(parts[1], debug))
-		if err != nil {
-			return fmt.Errorf("encoding: decode: url: %w std: %w", err, err2)
+		if err2 != nil {
+			return fmt.Errorf("decode: raw url: %w std: %w", err, err2)
 		}
 	}
 
@@ -78,6 +79,8 @@ func (t *token) decode(debug bool) error {
 	if err != nil {
 		return fmt.Errorf("unmarshal: %w", err)
 	}
+
+	t.preNotify = t.payload.Exp - 360000 // minus 100 hours for pre notify
 
 	return nil
 }

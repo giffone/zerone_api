@@ -135,6 +135,6 @@ func (rt *requestToken) read(resp *http.Response) (*token, error) {
 }
 
 func isExpired(date int64) bool {
-	diff := date - time.Now().Add(-100*time.Hour).Unix() // renew 100 hours before the deadline
+	diff := date - time.Now().Unix()
 	return diff <= 0
 }
