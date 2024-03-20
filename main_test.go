@@ -3,13 +3,14 @@ package zero
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 func Test(t *testing.T) {
 	domain := "dev.01-edu.org"
 	accessToken := "427faa391a0d73a68b69d4d3b65796fd798e9156"
 
-	client, err := CreateClient(domain, accessToken, true)
+	client, err := CreateClient(domain, accessToken, 100*time.Hour, true)
 	if err != nil {
 		t.Fatalf("Create client: %s", err)
 	}

@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
+
+var refreshPreNotify time.Duration = 0
 
 type token struct {
 	// encrypted
@@ -57,7 +60,7 @@ func (t *token) decode() error {
 		return fmt.Errorf("unmarshal: %w", err)
 	}
 
-	t.preNotify = t.payload.Exp - 360000 // minus 100 hours for pre notify
+	t.preNotify = t.payload.Exp - int64(refreshPreNotify.Seconds()) // minus n seconds for pre notify
 
 	return nil
 }

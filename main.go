@@ -12,9 +12,11 @@ type Client interface {
 	TokenBase() (int64, string, error)
 }
 
-func CreateClient(domain, accessToken string, debug bool) (Client, error) {
+func CreateClient(domain, accessToken string, tokenRefreshPreNotify time.Duration, debug bool) (Client, error) {
 	debugging = debug
 	logDebug(msgArgs, domain, accessToken)
+
+	refreshPreNotify = tokenRefreshPreNotify
 
 	var err error
 
@@ -95,11 +97,12 @@ func (c *client) Run(query string, variables map[string]interface{}) ([]byte, er
 
 func (c *client) check() (int64, string, error) {
 	c.storage.mu.RLock()
-	expireDate := c.storage.token.preNotify
+	expireDate := c.storage.token.payload.Exp
+	preNotify := c.storage.token.preNotify
 	base := c.storage.token.base64
 	c.storage.mu.RUnlock()
 
-	if isExpired(expireDate) {
+	if isExpired(preNotify) {
 		// get refreshed jwt token
 		token, err := c.request.refreshToken(base)
 		if err != nil {
@@ -110,7 +113,7 @@ func (c *client) check() (int64, string, error) {
 		c.storage.mu.Lock()
 		c.storage.token = token
 		base = c.storage.token.base64
-		expireDate = c.storage.token.preNotify
+		expireDate = c.storage.token.payload.Exp
 		c.storage.mu.Unlock()
 	}
 	return expireDate, base, nil
