@@ -8,19 +8,15 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"log"
 )
 
 type requestToken struct {
-	debug  bool
 	domain string
 	cli    *http.Client
 }
 
-func newRequestToken(domain, accessToken string, debug bool) *requestToken {
+func newRequestToken(domain string) *requestToken {
 	return &requestToken{
-		debug:  debug,
 		domain: domain,
 		cli: &http.Client{
 			Transport: &http.Transport{
@@ -47,17 +43,7 @@ func (rt *requestToken) sendRequest(path string, headers map[string]string, data
 
 	url := fmt.Sprintf("https://%s%s", rt.domain, path)
 
-	if rt.debug {
-		log.Printf(`
-{
-	"send request": {
-		"url": "%s",
-		"headers": "%v",
-		"body": "%v"
-	}
-}`,
-			url, headers, string(data))
-	}
+	logDebug(msgSendReq, url, headers, string(data))
 
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
@@ -114,20 +100,11 @@ func (rt *requestToken) read(resp *http.Response) (*token, error) {
 	strBody := string(body)
 	bodyUnquoted := strings.ReplaceAll(strBody, "\"", "")
 
-	if rt.debug {
-		log.Printf(`
-{
-	"response body": {
-		"body": "%s",
-		"unquoted": "%s"
-	}
-}`,
-			strBody, bodyUnquoted)
-	}
+	logDebug(msgRespBody, strBody, bodyUnquoted)
 
 	t := token{base64: bodyUnquoted}
 
-	if err := t.decode(rt.debug); err != nil {
+	if err := t.decode(); err != nil {
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 

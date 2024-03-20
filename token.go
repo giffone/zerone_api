@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 )
 
@@ -28,19 +27,10 @@ type token struct {
 	preNotify int64 // expire date minus n hours
 }
 
-func (t *token) decode(debug bool) error {
+func (t *token) decode() error {
 	parts := strings.Split(t.base64, ".")
 
-	if debug {
-		log.Printf(`
-{
-	"parts": {
-		"length": %d,
-		"list": "%v"
-	}
-}`,
-			len(parts), parts)
-	}
+	logDebug(msgTokenParts, len(parts), parts)
 
 	if len(parts) <= 1 {
 		return fmt.Errorf("the token length is incorrect")
@@ -49,30 +39,17 @@ func (t *token) decode(debug bool) error {
 	// raw encoding witout padding
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		if debug {
-			log.Printf(`
-{
-	"RawURLEncoding": {
-		"error": "%s",
-	}
-}`,
-				err)
-		}
+		logDebug(msgRawURLEncErr, err)
+
 		var err2 error
 		// try standard encoding with padding
-		payload, err2 = base64.StdEncoding.DecodeString(base64urlUnescape(parts[1], debug))
+		payload, err2 = base64.StdEncoding.DecodeString(base64urlUnescape(parts[1]))
 		if err2 != nil {
 			return fmt.Errorf("decode: raw url: %w std: %w", err, err2)
 		}
 	}
 
-	if debug {
-		log.Printf(`
-{
-	"payload": %s
-}`,
-			string(payload))
-	}
+	logDebug(msgTokenPayload, string(payload))
 
 	// parse data
 	err = json.Unmarshal(payload, &t.payload)
@@ -85,7 +62,7 @@ func (t *token) decode(debug bool) error {
 	return nil
 }
 
-func base64urlUnescape(str string, debug bool) string {
+func base64urlUnescape(str string) string {
 	padding := 4 - (len(str) % 4)
 	if padding == 4 {
 		padding = 0
@@ -96,13 +73,7 @@ func base64urlUnescape(str string, debug bool) string {
 	str = strings.ReplaceAll(str, "-", "+")
 	str = strings.ReplaceAll(str, "_", "/")
 
-	if debug {
-		log.Printf(`
-{
-"StdEncoding": "%s"
-}`,
-			str)
-	}
+	logDebug(msgStdEnc, str)
 
 	return str
 }

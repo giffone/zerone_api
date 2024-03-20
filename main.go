@@ -3,7 +3,6 @@ package zero
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -14,20 +13,12 @@ type Client interface {
 }
 
 func CreateClient(domain, accessToken string, debug bool) (Client, error) {
-	if debug {
-		log.Printf(`
-{
-	"domain": "%s",
-	"accessToken": "%s"
-}`,
-			domain, accessToken)
-	}
+	debugging = debug
+	logDebug(msgArgs, domain, accessToken)
+
 	var err error
 
-	c := client{
-		debug:   debug,
-		request: newRequestToken(domain, accessToken, debug),
-	}
+	c := client{request: newRequestToken(domain)}
 
 	// get new jwt token
 	c.storage.token, err = c.request.getNewToken(accessToken)
@@ -39,7 +30,6 @@ func CreateClient(domain, accessToken string, debug bool) (Client, error) {
 }
 
 type client struct {
-	debug   bool
 	storage struct {
 		mu    sync.RWMutex
 		token *token
@@ -57,10 +47,7 @@ func (c *client) Run(query string, variables map[string]interface{}) ([]byte, er
 	// prepare graphql query
 	form, err := json.Marshal(map[string]interface{}{"query": query, "variables": variables})
 	if err != nil {
-		if c.debug {
-			return nil, fmt.Errorf("marshal: query: %s\nvariables:%v\nerror: %w", query, variables, err)
-		}
-		return nil, fmt.Errorf("marshal: %w", err)
+		return nil, errDebug(errMashalQuery, query, variables, err)
 	}
 
 	// check if token is expired
@@ -80,10 +67,7 @@ func (c *client) Run(query string, variables map[string]interface{}) ([]byte, er
 
 	resp, err := c.request.sendRequest(path, headers, form)
 	if err != nil {
-		if c.debug {
-			return nil, fmt.Errorf("sendRequest: path: %s\nheaders: %v\nbody: %v\nerror: %s", path, headers, form, err)
-		}
-		return nil, fmt.Errorf("sendRequest: %w", err)
+		return nil, errDebug(errSendReq, path, headers, form, err)
 	}
 
 	defer resp.Body.Close()
@@ -97,18 +81,13 @@ func (c *client) Run(query string, variables map[string]interface{}) ([]byte, er
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
-		if c.debug {
-			return nil, fmt.Errorf("decode body: path: %s\nheaders: %v\nbody: %v\nerror: %s", path, headers, form, err)
-		}
-		return nil, fmt.Errorf("decode body: %w", err)
+		return nil, errDebug(errRespDecodeBody, path, headers, form, err)
 	}
 
+	// if graphql returned an error
 	if len(response.Errors) > 0 && response.Errors[0].Message != "" {
 		msg := response.Errors[0].Message
-		if c.debug {
-			return nil, fmt.Errorf("graphql: path: %s\nheaders: %v\nbody: %v\nerror: %s", path, headers, form, msg)
-		}
-		return nil, fmt.Errorf("graphql: %s", msg)
+		return nil, errDebug(errRespGraphqlErr, path, headers, form, msg)
 	}
 
 	return response.Data, nil
@@ -124,15 +103,14 @@ func (c *client) check() (int64, string, error) {
 		// get refreshed jwt token
 		token, err := c.request.refreshToken(base)
 		if err != nil {
-			if c.debug {
-				ed := time.Unix(expireDate, 0).Format("2006-01-02 15:04:05 MST")
-				return expireDate, base, fmt.Errorf("refresh token: exp date:%s\nbase: %s\nerror: %w", ed, base, err)
-			}
-			return expireDate, base, fmt.Errorf("refresh token: %w", err)
+			ed := time.Unix(expireDate, 0).Format("2006-01-02 15:04:05 MST")
+			return expireDate, base, errDebug(errRefreshToken, ed, base, err)
 		}
+		// refresh
 		c.storage.mu.Lock()
 		c.storage.token = token
 		base = c.storage.token.base64
+		expireDate = c.storage.token.preNotify
 		c.storage.mu.Unlock()
 	}
 	return expireDate, base, nil
